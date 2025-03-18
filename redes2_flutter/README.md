@@ -1,1 +1,0 @@
-# Projeto mobile para o trabalho de Redes de Computadores 2
