@@ -8,6 +8,18 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final List<String> fileNames = [
+      'Arquivo 1',
+      'Arquivo 2',
+      'Arquivo 3',
+      'Arquivo 4',
+      'Arquivo 5',
+      'Arquivo 6',
+      'Arquivo 7',
+      'Arquivo 8',
+      'Arquivo 9',
+    ];
+
     return Scaffold(
       appBar: AppBar(
         title: Row(
@@ -53,18 +65,14 @@ class HomeScreen extends StatelessWidget {
       ),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 20),
-        child: Container(
-          height: 76,
-          decoration: BoxDecoration(
-            color: LumaFilesConstants.secondaryColor,
-            borderRadius: BorderRadius.circular(15),
-          ),
-          child: const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24),
-            child: ListHomeWidget(
-              fileName: 'Nome do arquivo',
-            ),
-          ),
+        child: ListView.separated(
+          itemBuilder: (context, index) {
+            return ListHomeWidget(fileName: fileNames[index]);
+          },
+          itemCount: fileNames.length,
+          separatorBuilder: (context, index) {
+            return const SizedBox(height: 14);
+          },
         ),
       ),
     );
