@@ -15,13 +15,9 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Luma Files',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
       home: BlocProvider(
         create: (context) => LumaFilesBloc(),
-        child: const HomeScreen(),
+        child: const LogInScreen(),
       ),
     );
   }
