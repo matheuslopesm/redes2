@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:luma_files/bloc/bloc.dart';
 import 'package:luma_files/screens/screens.dart';
 
 void main() {
@@ -17,7 +19,10 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const HomeScreen(),
+      home: BlocProvider(
+        create: (context) => LumaFilesBloc(),
+        child: const HomeScreen(),
+      ),
     );
   }
 }
