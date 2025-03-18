@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:luma_files/utils/utils.dart';
+import 'package:luma_files/wigets/wigets.dart';
 
 class ListHomeWidget extends StatelessWidget {
   const ListHomeWidget({
@@ -73,7 +74,7 @@ class ListHomeWidget extends StatelessWidget {
               child: Center(
                 child: IconButton(
                   onPressed: () {
-                    // vou ter uma função que vai deletar o arquivo
+                    deleteDialog(context);
                   },
                   icon: const Icon(
                     Icons.delete,
