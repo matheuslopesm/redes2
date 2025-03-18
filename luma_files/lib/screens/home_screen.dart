@@ -21,7 +21,9 @@ class HomeScreen extends StatelessWidget {
     ];
 
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
+        backgroundColor: Colors.white,
         title: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -55,7 +57,9 @@ class HomeScreen extends StatelessWidget {
                   Icons.add,
                   color: Colors.white,
                 ),
-                onPressed: () {},
+                onPressed: () {
+                  uploadDialog(context);
+                },
               ),
             ),
           ],
