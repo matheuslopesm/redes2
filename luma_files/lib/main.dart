@@ -17,7 +17,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       home: BlocProvider(
         create: (context) => LumaFilesBloc(),
-        child: const SignUpScreen(),
+        child: const HomeScreen(),
       ),
     );
   }
