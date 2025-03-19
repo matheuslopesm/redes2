@@ -7,5 +7,10 @@
     "tsx": "^4.19.3",
     "typescript": "^5.8.2",
     "typescript-eslint": "^8.26.1"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start-server": "node dist/server.js",
+    "start-client": "node dist/client.js"
   }
 }
