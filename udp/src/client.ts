@@ -2,9 +2,7 @@ import dgram from 'dgram';
 import { writeFileSync } from 'fs';
 import path from 'path';
 import readline from 'readline';
-
-const PORT = 3001;
-const HOST = '127.0.0.1';
+import { env } from './env';
 
 const client = dgram.createSocket('udp4');
 
@@ -16,7 +14,7 @@ const rl = readline.createInterface({
 function enviarMensagem(mensagem: string) {
   const buffer = Buffer.from(mensagem);
 
-  client.send(buffer, 0, buffer.length, PORT, HOST, (err) => {
+  client.send(buffer, 0, buffer.length, Number(env.port), env.host, (err) => {
     if (err) {
       console.error('Erro ao enviar mensagem:', err);
       client.close();
