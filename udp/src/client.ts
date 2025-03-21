@@ -33,11 +33,13 @@ rl.on('line', (input: string) => {
       rl.close();
       client.close();
       return;
-    case 'listfiles':
-      enviarMensagem('LISTFILES');
+    case 'listfile':
+      enviarMensagem('LISTFILE');
       return;
     case 'downloadfile':
       downloadMessage(args)
+      return;
+    case 'uploadfile':
       return;
   }
   enviarMensagem(input);

@@ -18,10 +18,12 @@ server.on('message', (msg, rinfo) => {
     const [comando, ...args] = cmd.split(' ');
 
     switch (comando) {
-        case 'LISTFILES':
-            return listFiles(rinfo);
+        case 'LISTFILE':
+            return listFile(rinfo);
         case 'DOWNLOADFILE':
             return downloadFile(rinfo, args);
+        case 'UPLOADFILE':
+            return;
     }
 
 });
@@ -33,7 +35,7 @@ server.on('listening', () => {
 
 server.bind(3001);
 
-function listFiles(rinfo: dgram.RemoteInfo) {
+function listFile(rinfo: dgram.RemoteInfo) {
     try {
         const arquivos = readdirSync(UPLOADS);
 
