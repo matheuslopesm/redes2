@@ -12,7 +12,7 @@ const checkSum_1 = require("./functions/checkSum");
 const generateHash_1 = require("./functions/generateHash");
 const generateHeader_1 = require("./functions/generateHeader");
 const server = dgram_1.default.createSocket('udp4');
-const UPLOADS = path_1.default.join(__dirname, '../uploads');
+const UPLOADS = path_1.default.join(__dirname, '../storage');
 const clientesAutenticados = new Set();
 server.on('error', (err) => {
     console.error(`Erro no servidor:\n${err.stack}`);

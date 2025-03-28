@@ -8,7 +8,7 @@ import { generateHash } from './functions/generateHash';
 import { generateHeader } from './functions/generateHeader';
 
 const server = dgram.createSocket('udp4');
-const UPLOADS = path.join(__dirname, '../uploads');
+const STORAGE = path.join(__dirname, '../storage');
 
 const clientesAutenticados = new Set<string>();
 
@@ -60,7 +60,7 @@ function autenticarCliente(msg: string, rinfo: dgram.RemoteInfo, clienteChave: s
 
 function listFile(rinfo: dgram.RemoteInfo) {
     try {
-        const arquivos = readdirSync(UPLOADS);
+        const arquivos = readdirSync(STORAGE);
 
         if (arquivos.length === 0) {
             const resposta = Buffer.from('Não há arquivos no servidor!');
@@ -85,7 +85,7 @@ function downloadFile(rinfo: dgram.RemoteInfo, args: string[]) {
         return;
     }
 
-    const caminhoArquivo = path.join(UPLOADS, nomeArquivo);
+    const caminhoArquivo = path.join(STORAGE, nomeArquivo);
 
     try {
         const hash = generateHash(caminhoArquivo);
