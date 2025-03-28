@@ -1,5 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import dgram from 'dgram';
-import { writeFileSync } from 'fs';
+import { readFileSync, writeFileSync } from 'fs';
 import path from 'path';
 import readline from 'readline';
 import { env } from './env';
@@ -8,6 +9,7 @@ import { generateHash } from './functions/generateHash';
 import { generateHeader } from './functions/generateHeader';
 
 const client = dgram.createSocket('udp4');
+const STORAGE = path.join(__dirname, '../storage');
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -41,6 +43,7 @@ rl.on('line', (input: string) => {
       downloadMessage(args);
       return;
     case 'uploadfile':
+      uploadMessage(args);
       return; // Falta implementar
   }
 
@@ -119,4 +122,92 @@ function iniciarRecepcao(fileName: string) {
   }
 
   client.on('message', messageHandler);
+}
+
+function uploadMessage(args: string[]) {
+  const nomeArquivo = args.join(' ');
+
+  if (!nomeArquivo) {
+    console.log('Você precisa informar o nome do arquivo!');
+    return;
+  }
+
+  const caminhoArquivo = path.join(STORAGE, nomeArquivo);
+
+  try {
+    const fileBuffer = readFileSync(caminhoArquivo);
+    const hash = generateHash(caminhoArquivo);
+    enviarArquivo(fileBuffer, hash);
+  } catch (err) {
+    console.log('Erro ao ler o arquivo. Verifique se ele existe na pasta storage.');
+    return;
+  }
+
+  enviarMensagem(`UPLOADFILE ${nomeArquivo}`);
+
+}
+
+function enviarArquivo(fileBuffer: Buffer<ArrayBufferLike>, hash: string) {
+  const chunkSize = 1450;
+  const windowSize = 4;
+  let base = 0;
+  let nextSeqNum = 0;
+  let offset = 0;
+  const timeouts: NodeJS.Timeout[] = [];
+
+  function ackHandler(ackMsg: Buffer) {
+    const ackSeqNum = ackMsg.readUint32BE(0);
+    const isAck = ackMsg.readUint8(4);
+
+    if (isAck === 1) {
+      console.log(`✅ ACK recebido para Seq ${ackSeqNum}`);
+      clearTimeout(timeouts[ackSeqNum]);
+
+      if (ackSeqNum === base) {
+        base++;
+        enviarPacotes();
+      }
+
+      if (base * chunkSize >= fileBuffer.length) {
+        const eofHeader = generateHeader(nextSeqNum, 0, 1, 0);
+        client.send(eofHeader, 0, eofHeader.length, Number(env.port), env.host);
+        console.log('✅ EOF enviado, finalizando upload!');
+        console.log(`🔑 Hash SHA-256 do arquivo enviado: ${hash}`);
+        client.off('message', ackHandler);
+      }
+    }
+  }
+
+  client.on('message', ackHandler);
+
+  function enviarPacotes() {
+    while (nextSeqNum < base + windowSize && offset < fileBuffer.length) {
+      const chunk = fileBuffer.slice(offset, offset + chunkSize);
+      const checksum = checkSum(chunk);
+      const header = generateHeader(nextSeqNum, 0, 0, checksum);
+      const packet = Buffer.concat([header, chunk]);
+
+      client.send(packet, 0, packet.length, Number(env.port), env.host);
+      console.log(`📤 Pacote enviado: Seq ${nextSeqNum}`);
+
+      definirReenvio(nextSeqNum, packet);
+
+      offset += chunkSize;
+      nextSeqNum++;
+    }
+  }
+
+  function definirReenvio(seqNum: number, packet: Buffer) {
+    if (timeouts[seqNum]) {
+      clearTimeout(timeouts[seqNum]);
+    }
+
+    timeouts[seqNum] = setTimeout(() => {
+      console.log(`⏰ Timeout! Retransmitindo pacote Seq ${seqNum}`);
+      client.send(packet, 0, packet.length, Number(env.port), env.host);
+      definirReenvio(seqNum, packet);
+    }, 1000);
+  }
+
+  enviarPacotes();
 }

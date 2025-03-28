@@ -3,6 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+/* eslint-disable @typescript-eslint/no-unused-vars */
 const dgram_1 = __importDefault(require("dgram"));
 const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
@@ -12,6 +13,7 @@ const checkSum_1 = require("./functions/checkSum");
 const generateHash_1 = require("./functions/generateHash");
 const generateHeader_1 = require("./functions/generateHeader");
 const client = dgram_1.default.createSocket('udp4');
+const STORAGE = path_1.default.join(__dirname, '../storage');
 const rl = readline_1.default.createInterface({
     input: process.stdin,
     output: process.stdout
@@ -40,6 +42,7 @@ rl.on('line', (input) => {
             downloadMessage(args);
             return;
         case 'uploadfile':
+            uploadMessage(args);
             return; // Falta implementar
     }
     enviarMensagem(input);
@@ -100,4 +103,74 @@ function iniciarRecepcao(fileName) {
         }
     }
     client.on('message', messageHandler);
+}
+function uploadMessage(args) {
+    const nomeArquivo = args.join(' ');
+    if (!nomeArquivo) {
+        console.log('Você precisa informar o nome do arquivo!');
+        return;
+    }
+    const caminhoArquivo = path_1.default.join(STORAGE, nomeArquivo);
+    try {
+        const fileBuffer = (0, fs_1.readFileSync)(caminhoArquivo);
+        const hash = (0, generateHash_1.generateHash)(caminhoArquivo);
+        enviarArquivo(fileBuffer, hash);
+    }
+    catch (err) {
+        console.log('Erro ao ler o arquivo. Verifique se ele existe na pasta storage.');
+        return;
+    }
+    enviarMensagem(`UPLOADFILE ${nomeArquivo}`);
+}
+function enviarArquivo(fileBuffer, hash) {
+    const chunkSize = 1450;
+    const windowSize = 4;
+    let base = 0;
+    let nextSeqNum = 0;
+    let offset = 0;
+    const timeouts = [];
+    function ackHandler(ackMsg) {
+        const ackSeqNum = ackMsg.readUint32BE(0);
+        const isAck = ackMsg.readUint8(4);
+        if (isAck === 1) {
+            console.log(`✅ ACK recebido para Seq ${ackSeqNum}`);
+            clearTimeout(timeouts[ackSeqNum]);
+            if (ackSeqNum === base) {
+                base++;
+                enviarPacotes();
+            }
+            if (base * chunkSize >= fileBuffer.length) {
+                const eofHeader = (0, generateHeader_1.generateHeader)(nextSeqNum, 0, 1, 0);
+                client.send(eofHeader, 0, eofHeader.length, Number(env_1.env.port), env_1.env.host);
+                console.log('✅ EOF enviado, finalizando upload!');
+                console.log(`🔑 Hash SHA-256 do arquivo enviado: ${hash}`);
+                client.off('message', ackHandler);
+            }
+        }
+    }
+    client.on('message', ackHandler);
+    function enviarPacotes() {
+        while (nextSeqNum < base + windowSize && offset < fileBuffer.length) {
+            const chunk = fileBuffer.slice(offset, offset + chunkSize);
+            const checksum = (0, checkSum_1.checkSum)(chunk);
+            const header = (0, generateHeader_1.generateHeader)(nextSeqNum, 0, 0, checksum);
+            const packet = Buffer.concat([header, chunk]);
+            client.send(packet, 0, packet.length, Number(env_1.env.port), env_1.env.host);
+            console.log(`📤 Pacote enviado: Seq ${nextSeqNum}`);
+            definirReenvio(nextSeqNum, packet);
+            offset += chunkSize;
+            nextSeqNum++;
+        }
+    }
+    function definirReenvio(seqNum, packet) {
+        if (timeouts[seqNum]) {
+            clearTimeout(timeouts[seqNum]);
+        }
+        timeouts[seqNum] = setTimeout(() => {
+            console.log(`⏰ Timeout! Retransmitindo pacote Seq ${seqNum}`);
+            client.send(packet, 0, packet.length, Number(env_1.env.port), env_1.env.host);
+            definirReenvio(seqNum, packet);
+        }, 1000);
+    }
+    enviarPacotes();
 }

@@ -12,7 +12,8 @@ const checkSum_1 = require("./functions/checkSum");
 const generateHash_1 = require("./functions/generateHash");
 const generateHeader_1 = require("./functions/generateHeader");
 const server = dgram_1.default.createSocket('udp4');
-const UPLOADS = path_1.default.join(__dirname, '../storage');
+const STORAGE = path_1.default.join(__dirname, '../storage');
+const UPLOADS = path_1.default.join(__dirname, '../uploads');
 const clientesAutenticados = new Set();
 server.on('error', (err) => {
     console.error(`Erro no servidor:\n${err.stack}`);
@@ -33,7 +34,7 @@ server.on('message', (msg, rinfo) => {
         case 'DOWNLOADFILE':
             return downloadFile(rinfo, args);
         case 'UPLOADFILE':
-            return; // ainda não implementado
+            return iniciarRecepcao(args.join(''), rinfo);
     }
 });
 server.on('listening', () => {
@@ -52,7 +53,7 @@ function autenticarCliente(msg, rinfo, clienteChave) {
 }
 function listFile(rinfo) {
     try {
-        const arquivos = (0, fs_1.readdirSync)(UPLOADS);
+        const arquivos = (0, fs_1.readdirSync)(STORAGE);
         if (arquivos.length === 0) {
             const resposta = Buffer.from('Não há arquivos no servidor!');
             server.send(resposta, rinfo.port, rinfo.address);
@@ -75,7 +76,7 @@ function downloadFile(rinfo, args) {
         server.send(resposta, rinfo.port, rinfo.address);
         return;
     }
-    const caminhoArquivo = path_1.default.join(UPLOADS, nomeArquivo);
+    const caminhoArquivo = path_1.default.join(STORAGE, nomeArquivo);
     try {
         const hash = (0, generateHash_1.generateHash)(caminhoArquivo);
         sendFile(rinfo, caminhoArquivo, hash);
@@ -144,4 +145,45 @@ function sendFile(rinfo, filePath, hash) {
             setRetransmission(seqNum, packet);
         }, 1000);
     }
+}
+function iniciarRecepcao(fileName, rinfo) {
+    if (!fileName) {
+        server.send(Buffer.from('Erro: Nome do arquivo não especificado!'), rinfo.port, rinfo.address);
+        return;
+    }
+    console.log(`📥 Iniciando recepção do arquivo: ${fileName}`);
+    const destino = path_1.default.join(UPLOADS, fileName);
+    const chunks = [];
+    let expectedSeq = 0;
+    function messageHandler(msg, senderInfo) {
+        if (senderInfo.address !== rinfo.address || senderInfo.port !== rinfo.port)
+            return;
+        const seqNum = msg.readUInt32BE(0);
+        const isAck = msg.readUInt8(4);
+        const eofFlag = msg.readUInt8(5);
+        const checksum = msg.readUInt32BE(6);
+        const payload = msg.slice(10);
+        if (eofFlag === 1) {
+            const arquivoFinal = Buffer.concat(chunks);
+            (0, fs_1.writeFileSync)(destino, arquivoFinal);
+            console.log(`✅ EOF recebido. Arquivo "${fileName}" montado com sucesso!`);
+            const hash = (0, generateHash_1.generateHash)(destino);
+            console.log(`🔑 Hash SHA-256 do arquivo recebido: ${hash}`);
+            server.off('message', messageHandler);
+            return;
+        }
+        if (seqNum === expectedSeq && isAck === 0 && (0, checkSum_1.checkSum)(payload) === checksum) {
+            console.log(`✅ Pacote válido recebido: Seq ${seqNum}`);
+            chunks.push(payload);
+            const ack = (0, generateHeader_1.generateHeader)(seqNum, 1, 0, 0);
+            server.send(ack, rinfo.port, rinfo.address);
+            expectedSeq++;
+        }
+        else {
+            console.log(`⚠️ Pacote inválido ou fora de ordem! Esperado: ${expectedSeq}, Recebido: ${seqNum}`);
+            const ack = (0, generateHeader_1.generateHeader)(expectedSeq - 1, 1, 0, 0);
+            server.send(ack, rinfo.port, rinfo.address);
+        }
+    }
+    server.on('message', messageHandler);
 }
