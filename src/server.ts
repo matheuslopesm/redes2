@@ -197,10 +197,16 @@ function sendFile(rinfo: dgram.RemoteInfo, filePath: string, hash: string) {
 
             clearTimeout(timeouts[ackSeqNum]);
 
+            let lastBase = base;
+
             if (ackSeqNum >= base) {
                 base++;
                 console.log(`Base: ${base}, NextSeqNum: ${nextSeqNum}, ackSeqNum: ${ackSeqNum}`);
-                sendPacketsInSlidingWindow();
+
+                if (base > lastBase) {
+                    lastBase = base;
+                    sendPacketsInSlidingWindow();
+                }
             }
 
             if (base * chunkSize >= fileBuffer.length) {

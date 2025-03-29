@@ -190,10 +190,14 @@ function sendFile(rinfo, filePath, hash) {
         if (isAck === 1) {
             console.log(`✅ ACK recebido para Seq ${ackSeqNum}`);
             clearTimeout(timeouts[ackSeqNum]);
+            let lastBase = base;
             if (ackSeqNum >= base) {
                 base++;
                 console.log(`Base: ${base}, NextSeqNum: ${nextSeqNum}, ackSeqNum: ${ackSeqNum}`);
-                sendPacketsInSlidingWindow();
+                if (base > lastBase) {
+                    lastBase = base;
+                    sendPacketsInSlidingWindow();
+                }
             }
             if (base * chunkSize >= fileBuffer.length) {
                 const eofHeader = (0, generateHeader_1.generateHeader)(nextSeqNum, 0, 1, 0);
