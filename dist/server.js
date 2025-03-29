@@ -1,4 +1,13 @@
 "use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -181,7 +190,9 @@ function sendFile(rinfo, filePath, hash) {
         if (isAck === 1) {
             console.log(`✅ ACK recebido para Seq ${ackSeqNum}`);
             clearTimeout(timeouts[ackSeqNum]);
+            console.log(`Base: ${base}, NextSeqNum: ${nextSeqNum}, ackSeqNum: ${ackSeqNum}`);
             if (ackSeqNum === base) {
+                console.log('teste');
                 base++;
                 sendPacketsInSlidingWindow();
             }
@@ -197,27 +208,30 @@ function sendFile(rinfo, filePath, hash) {
     }
     server.on('message', ackHandler);
     function sendPacketsInSlidingWindow() {
-        /*
-            Envia os pacotes para o cliente dentro de uma janela deslizante de tamanho fixo (windowSize). Ela envia
-            os pacotes enquanto o próximo número de sequência está dentro da janela permitida (base + windowSize) e
-            enquanto houver dados para enviar (offset < fileBuffer.length).
-            O arquivo é dividido em pedaços definidos por chunkSize, e para cada pedaço é calculado
-            um checkum para ser colocado no cabeçalho e garantir a integridade desse pacote.
-            Depois disso, ao transmitir o pacote, se um ACK não foi recebido, ele será retransmitido pela função
-            setRetransmission.
-            No final o offset é atualizado e o próximo pedaço do arquivo e o nextSeqNum é incrementado.
-        */
-        while (nextSeqNum < base + windowSize && offset < fileBuffer.length) {
-            const chunk = fileBuffer.slice(offset, offset + chunkSize);
-            const checksum = (0, checkSum_1.checkSum)(chunk);
-            const header = (0, generateHeader_1.generateHeader)(nextSeqNum, 0, 0, checksum);
-            const packet = Buffer.concat([header, chunk]);
-            server.send(packet, rinfo.port, rinfo.address);
-            console.log(`📤 Pacote enviado: Seq ${nextSeqNum}`);
-            setRetransmission(nextSeqNum, packet);
-            offset += chunkSize;
-            nextSeqNum++;
-        }
+        return __awaiter(this, void 0, void 0, function* () {
+            /*
+                Envia os pacotes para o cliente dentro de uma janela deslizante de tamanho fixo (windowSize). Ela envia
+                os pacotes enquanto o próximo número de sequência está dentro da janela permitida (base + windowSize) e
+                enquanto houver dados para enviar (offset < fileBuffer.length).
+                O arquivo é dividido em pedaços definidos por chunkSize, e para cada pedaço é calculado
+                um checkum para ser colocado no cabeçalho e garantir a integridade desse pacote.
+                Depois disso, ao transmitir o pacote, se um ACK não foi recebido, ele será retransmitido pela função
+                setRetransmission.
+                No final o offset é atualizado e o próximo pedaço do arquivo e o nextSeqNum é incrementado.
+            */
+            while (nextSeqNum < base + windowSize && offset < fileBuffer.length) {
+                const chunk = fileBuffer.slice(offset, offset + chunkSize);
+                const checksum = (0, checkSum_1.checkSum)(chunk);
+                const header = (0, generateHeader_1.generateHeader)(nextSeqNum, 0, 0, checksum);
+                const packet = Buffer.concat([header, chunk]);
+                server.send(packet, rinfo.port, rinfo.address);
+                console.log(`📤 Pacote enviado: Seq ${nextSeqNum}`);
+                setRetransmission(nextSeqNum, packet);
+                offset += chunkSize;
+                nextSeqNum++;
+                console.log('sliding');
+            }
+        });
     }
     function setRetransmission(seqNum, packet) {
         /*

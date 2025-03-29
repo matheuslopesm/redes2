@@ -109,6 +109,7 @@ function startReceiving(fileName) {
     const destination = path_1.default.join(__dirname, `../downloads/${fileName}`);
     const chunks = [];
     let expectedSeq = 0;
+    let isDownloadComplete = false;
     console.log(`📥 Iniciando recebimento do arquivo: ${fileName}`);
     function messageHandler(msg) {
         /*
@@ -136,13 +137,8 @@ function startReceiving(fileName) {
         const checksum = msg.readUInt32BE(6);
         const payload = msg.slice(10);
         if (eofFlag === 1) {
-            const arquivoFinal = Buffer.concat(chunks);
-            (0, fs_1.writeFileSync)(destination, arquivoFinal);
             console.log(`✅ EOF recebido. Arquivo "${fileName}" montado!`);
-            const hash = (0, generateHash_1.generateHash)(destination);
-            console.log(`🔑 Hash SHA-256 do arquivo recebido: ${hash}`);
-            client.off('message', messageHandler);
-            return;
+            isDownloadComplete = true;
         }
         if (seqNum === expectedSeq && isAck === 0 && (0, checkSum_1.checkSum)(payload) === checksum) {
             console.log(`✅ Pacote válido recebido: Seq ${seqNum}`);
@@ -155,6 +151,15 @@ function startReceiving(fileName) {
             console.log(`⚠️ Pacote inválido ou fora de ordem! Esperado: ${expectedSeq}, Recebido: ${seqNum}`);
             const ack = (0, generateHeader_1.generateHeader)(expectedSeq - 1, 1, 0, 0);
             client.send(ack, 0, ack.length, Number(env_1.env.port), env_1.env.host);
+        }
+        if (isDownloadComplete && expectedSeq === chunks.length) {
+            // Salva o arquivo apenas quando todos os pacotes forem recebidos corretamente
+            const arquivoFinal = Buffer.concat(chunks);
+            (0, fs_1.writeFileSync)(destination, arquivoFinal);
+            console.log(`✅ Arquivo "${fileName}" salvo com sucesso em: ${destination}`);
+            const hash = (0, generateHash_1.generateHash)(destination);
+            console.log(`🔑 Hash SHA-256 do arquivo recebido: ${hash}`);
+            client.off('message', messageHandler);
         }
     }
     client.on('message', messageHandler);
@@ -207,12 +212,11 @@ function sendFile(rinfo, fileBuffer, hash) {
     let offset = 0;
     const timeouts = [];
     sendPacketsInSlidingWindow();
-    function ackHandler(ackMsg, ackRinfo) {
+    function ackHandler(ackMsg) {
         /*
             Parâmetros:
             - ackMsg: Pacote de dados recebido do cliente que contém o número de sequência
             e uma flag indicando se é um ACK.
-            - ackRinfo: Objeto que contém informações sobre o remetente do ACK.
 
             Processa os ACKs enviados pelo cliente. Quando o server receber um, ele
             verifica se é um pacote válido e se corresponde ao arquivo enviado.
