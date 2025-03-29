@@ -22,7 +22,7 @@ function sendMessage(msg) {
     /*
       Parâmetros:
       - msg: Mensagem a ser enviada pelo cliente.
-  
+
       Responsável por enviar qualquer mensagem do cliente para o servidor.
     */
     const buffer = Buffer.from(msg);
@@ -33,11 +33,12 @@ function sendMessage(msg) {
         }
     });
 }
-rl.on('line', (input) => {
+rl.on('line', (input, rinfo) => {
     /*
       Parâmetros:
       - input: Toda e qualquer mensagem passada pelo teclado do cliente.
-  
+      - rinfo: Contém informações sobre quem enviou o pacote, como endereço IP, porta...
+
       Responsável por identificar comandos específicos e seguir os fluxos dos mesmos.
     */
     const [command, ...args] = input.trim().split(' ');
@@ -54,7 +55,7 @@ rl.on('line', (input) => {
             downloadFileMsg(args);
             return;
         case 'uploadfile':
-            uploadFileMsg(args);
+            uploadFileMsg(rinfo, args);
             return;
     }
     sendMessage(input);
@@ -64,7 +65,7 @@ client.on('message', (msg, rinfo) => {
       Parâmetros:
       - msg: Pacote recebido pelo servidor.
       - rinfo: Objeto contendo informações sobre o servidor que enviou o pacote.
-      
+
       Processa e exibe as mensagens vindas do servidor. Dependendo da mensagem
       ele a exibe, senão trata como padrão.
     */
@@ -81,7 +82,7 @@ function downloadFileMsg(args) {
       Parâmetros:
       - args: O restante da string do comando de download, ou seja, o nome do arquivo que
       se deseja baixar.
-  
+
       Inicia o processo de download chamando a função que fará a recepção do arquivo.
      */
     const fileName = args.join(' ');
@@ -96,16 +97,16 @@ function startReceiving(fileName) {
     /*
       Parâmetros:
       - fileName: Nome do arquivo que está sendo recebido pelo servidor.
-  
+
       Essa função é responsável por receber o arquivo vindo do servidor. Gerenciando
       a montagem do arquivo a partir de pacotes recebidos e garantindo a integridade deles.
-  
+
       Fluxo:
       * 1. Cria um array para armazenar os pacotes recebidos e inicializa o número de
       sequência esperado.
       * 2. Inicia a função responsável por tratar os pacotes recebidos.
     */
-    const destino = path_1.default.join(__dirname, `../downloads/${fileName}`);
+    const destination = path_1.default.join(__dirname, `../downloads/${fileName}`);
     const chunks = [];
     let expectedSeq = 0;
     console.log(`📥 Iniciando recebimento do arquivo: ${fileName}`);
@@ -113,10 +114,10 @@ function startReceiving(fileName) {
         /*
           Parâmetros:
           - msg: Pacote de dados recebido do servidor.
-    
+
           Responsável por processar cada mensagem (pacote) recebida do servidor
           durante o processo de download de um arquivo.
-    
+
           Fluxo:
           * 1. É verificado se existe algum erro, desliga o cliente.
           * 2. Se for um pacote com eofFlag, salve o arquivo e gera um hash.
@@ -136,9 +137,9 @@ function startReceiving(fileName) {
         const payload = msg.slice(10);
         if (eofFlag === 1) {
             const arquivoFinal = Buffer.concat(chunks);
-            (0, fs_1.writeFileSync)(destino, arquivoFinal);
+            (0, fs_1.writeFileSync)(destination, arquivoFinal);
             console.log(`✅ EOF recebido. Arquivo "${fileName}" montado!`);
-            const hash = (0, generateHash_1.generateHash)(destino);
+            const hash = (0, generateHash_1.generateHash)(destination);
             console.log(`🔑 Hash SHA-256 do arquivo recebido: ${hash}`);
             client.off('message', messageHandler);
             return;
@@ -158,16 +159,16 @@ function startReceiving(fileName) {
     }
     client.on('message', messageHandler);
 }
-function uploadFileMsg(args) {
+function uploadFileMsg(rinfo, args) {
     /*
       Parâmetros:
-      - args: O restante da string do comando de download, ou seja, o nome do arquivo que
-      se deseja baixar.
-  
+      - rinfo: Contém informações sobre quem enviou o pacote, como endereço IP, porta...
+      - args: O restante da string do comando de upload, ou seja, o nome do arquivo que
+      se deseja mandar pro server.
+
       Essa função realiza o upload do arquivo para o servidor. Ela verifica se o nome foi passado, se
       foi com sucesso já cria o caminho para salvamento do arquivo, após isso gera o hash do mesmo
-      e chama a função de envio.
-      Caso aconteça um erro na leitura, emite o erro.
+      e chama a função de envio. Caso aconteça um erro na leitura, emite o erro.
     */
     const fileName = args.join(' ');
     if (!fileName) {
@@ -178,7 +179,7 @@ function uploadFileMsg(args) {
     try {
         const fileBuffer = (0, fs_1.readFileSync)(filePath);
         const hash = (0, generateHash_1.generateHash)(filePath);
-        sendFile(fileBuffer, hash);
+        sendFile(rinfo, fileBuffer, hash);
     }
     catch (err) {
         console.log('Erro ao ler o arquivo. Verifique se ele existe na pasta storage.');
@@ -186,13 +187,14 @@ function uploadFileMsg(args) {
     }
     sendMessage(`UPLOADFILE ${fileName}`);
 }
-function sendFile(fileBuffer, hash) {
+function sendFile(rinfo, fileBuffer, hash) {
     /*
       Parâmetros:
+      - rinfo: Contém informações sobre quem enviou o pacote, como endereço IP, porta...
       - fileBuffer: São os dados do arquivo que está sendo enviado para o servidor.
       - hash: Hash de verificação do arquivo.
-  
-      Utiliza uma janela deslizante (`Sliding Window`) com tamanho fixo definido por `windowSize` (4 pacotes simultâneos) e
+
+      Utiliza uma janela deslizante com tamanho fixo definido por `windowSize` (4 pacotes simultâneos) e
       implementa retransmissão automática de pacotes através de um sistema de timeout (`setTimeout`), redefinido a cada envio bem-sucedido.
       O listener (`server.on('message', ackHandler)`) serve para receber confirmações (`ACKs`) do cliente, e quando todos os pacotes
       são enviados e reconhecidos, o servidor envia um pacote especial de EOF (End of File) para indicar o término da transmissão e
@@ -205,7 +207,19 @@ function sendFile(fileBuffer, hash) {
     let offset = 0;
     const timeouts = [];
     sendPacketsInSlidingWindow();
-    function ackHandler(ackMsg) {
+    function ackHandler(ackMsg, ackRinfo) {
+        /*
+            Parâmetros:
+            - ackMsg: Pacote de dados recebido do cliente que contém o número de sequência
+            e uma flag indicando se é um ACK.
+            - ackRinfo: Objeto que contém informações sobre o remetente do ACK.
+
+            Processa os ACKs enviados pelo cliente. Quando o server receber um, ele
+            verifica se é um pacote válido e se corresponde ao arquivo enviado.
+            Se for válido, limpa o timeout e avança a base da janela deslizante.
+            Por fim, quando todos os pacotes são enviados e reconhecidos, envia um pacote EOF
+            para indicar o término da transmissão.
+        */
         const ackSeqNum = ackMsg.readUint32BE(0);
         const isAck = ackMsg.readUint8(4);
         if (isAck === 1) {
@@ -226,6 +240,16 @@ function sendFile(fileBuffer, hash) {
     }
     client.on('message', ackHandler);
     function sendPacketsInSlidingWindow() {
+        /*
+          Envia os pacotes para o servidor dentro de uma janela deslizante de tamanho fixo (windowSize). Ela envia
+          os pacotes enquanto o próximo número de sequência está dentro da janela permitida (base + windowSize) e
+          enquanto houver dados para enviar (offset < fileBuffer.length).
+          O arquivo é dividido em pedaços definidos por chunkSize, e para cada pedaço é calculado
+          um checksum para ser colocado no cabeçalho e garantir a integridade desse pacote.
+          Depois disso, ao transmitir o pacote, se um ACK não foi recebido, ele será retransmitido pela função
+          setRetransmission.
+          No final o offset é atualizado e o próximo pedaço do arquivo e o nextSeqNum é incrementado.
+        */
         while (nextSeqNum < base + windowSize && offset < fileBuffer.length) {
             const chunk = fileBuffer.slice(offset, offset + chunkSize);
             const checksum = (0, checkSum_1.checkSum)(chunk);
@@ -239,6 +263,22 @@ function sendFile(fileBuffer, hash) {
         }
     }
     function setRetransmission(seqNum, packet) {
+        /*
+          Parâmetros:
+          - seqNum: Número de sequência do pacote que será retransmitido.
+          - packet: Pacote que será retransmitido caso o ACK não seja recebido.
+
+          Responsável por configurar um mecanismo de retransmissão automática para pacotes que
+          não receberem um ACK do cliente em um período específico.
+
+          Fluxo:
+
+          * 1. Se já existir um timeout configurado para o número de sequência fornecido (seqNum),
+          ele é limpo utilizando clearTimeout(), evitando múltiplos timeouts para o mesmo pacote.
+          * 2. Um novo timeout é configurado usando setTimeout(). Se o ACK do pacote (seqNum) não
+          for recebido dentro do tempo, o pacote é retransmitido para o cliente e o timeout é
+          configurado novamente através de uma chamada recursiva da própria função setRetransmission().
+        */
         const time = 1000;
         if (timeouts[seqNum]) {
             clearTimeout(timeouts[seqNum]);

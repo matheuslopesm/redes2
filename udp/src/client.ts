@@ -248,8 +248,6 @@ function sendFile(rinfo: dgram.RemoteInfo, fileBuffer: Buffer<ArrayBufferLike>, 
             Por fim, quando todos os pacotes são enviados e reconhecidos, envia um pacote EOF
             para indicar o término da transmissão.
         */
-        if (ackRinfo.address !== rinfo.address || ackRinfo.port !== rinfo.port) return;
-
         const ackSeqNum = ackMsg.readUint32BE(0);
         const isAck = ackMsg.readUint8(4);
 

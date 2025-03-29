@@ -28,7 +28,7 @@ server.on('message', (msg, rinfo) => {
         Parâmetros:
         - msg: É o conteúdo do pacote recebido pelo servidor, que contém os dados
         enviados pelo cliente.
-        - rinfo: Contém informações sobre o cliente que enviou o pacote, como endereço IP, porta...
+        - rinfo: Contém informações sobre quem enviou o pacote, como endereço IP, porta...
 
         Responsável por realizar a ligação com o cliente. Caso ele
         não esteja autenticado, chama a função de autenticar cliente.
@@ -65,7 +65,8 @@ function verifyClient(msg, rinfo, clientKey) {
         Parâmetros:
         - msg: É o conteúdo do pacote recebido pelo servidor, que contém os dados
         enviados pelo cliente.
-        - rinfo: Contém informações sobre o cliente que enviou o pacote, como endereço IP, porta...
+        - rinfo: Contém informações sobre quem enviou o pacote, como endereço IP, porta...
+        - clientKey: Combinação IP e chave do cliente.
 
         Responsável por autenticar o cliente. Caso a mensagem não seja igual a palavra-passe,
         emite a mensagem de autenticação. Caso contrário adiciona o cliente na lista de autenticados.
@@ -81,7 +82,7 @@ function verifyClient(msg, rinfo, clientKey) {
 function listFile(rinfo) {
     /*
         Parâmetros:
-        - rinfo: Contém informações sobre o cliente que enviou o pacote, como endereço IP, porta...
+        - rinfo: Contém informações sobre quem enviou o pacote, como endereço IP, porta...
 
         Lista os arquivos que estão no diretório/pasta storage.
     */
@@ -105,7 +106,7 @@ function listFile(rinfo) {
 function downloadFile(rinfo, args) {
     /*
         Parâmetros:
-        - rinfo: Contém informações sobre o cliente que enviou o pacote, como endereço IP, porta...
+        - rinfo: Contém informações sobre quem enviou o pacote, como endereço IP, porta...
         - args: O restante da string do comando de download, ou seja, o nome do arquivo que
         se deseja baixar.
 
@@ -134,7 +135,7 @@ function downloadFile(rinfo, args) {
 function sendFile(rinfo, filePath, hash) {
     /*
         Parâmetros:
-        - rinfo: Contém informações sobre o cliente que enviou o pacote, como endereço IP, porta...
+        - rinfo: Contém informações sobre quem enviou o pacote, como endereço IP, porta...
         - filePath: É o caminho de salvamento do arquivo que está sendo enviado pelo servidor.
         - hash: Hash de verificação do arquivo.
 
@@ -225,10 +226,10 @@ function sendFile(rinfo, filePath, hash) {
             - packet: Pacote que será retransmitido caso o ACK não seja recebido.
 
             Responsável por configurar um mecanismo de retransmissão automática para pacotes que
-            não receberem um ACK do cliente em um período específico (period).
-            
+            não receberem um ACK do cliente em um período específico.
+
             Fluxo:
-            
+
             * 1. Se já existir um timeout configurado para o número de sequência fornecido (seqNum),
             ele é limpo utilizando clearTimeout(), evitando múltiplos timeouts para o mesmo pacote.
             * 2. Um novo timeout é configurado usando setTimeout(). Se o ACK do pacote (seqNum) não
@@ -250,7 +251,7 @@ function startReceiving(fileName, rinfo) {
     /*
         Parâmetros:
         - fileName: Nome do arquivo que está sendo recebido pelo servidor.
-        - rinfo: Contém informações sobre o cliente que enviou o pacote, como endereço IP, porta...
+        - rinfo: Contém informações sobre quem enviou o pacote, como endereço IP, porta...
 
         Essa função é responsável por receber o arquivo vindo do cliente. Ela recebe o arquivo em pacotes, verifica
         a integridade de cada pacote utilizando checksum e monta o arquivo completo quando o processo é finalizado.
@@ -274,7 +275,6 @@ function startReceiving(fileName, rinfo) {
     function messageHandler(msg, senderInfo) {
         /*
             Parâmetros:
-
             - msg: Pacote de dados recebido do cliente.
             - senderInfo: Contém informações sobre o cliente que enviou o pacote, como endereço IP, porta...
 
