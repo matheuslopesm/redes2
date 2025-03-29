@@ -190,10 +190,9 @@ function sendFile(rinfo, filePath, hash) {
         if (isAck === 1) {
             console.log(`✅ ACK recebido para Seq ${ackSeqNum}`);
             clearTimeout(timeouts[ackSeqNum]);
-            console.log(`Base: ${base}, NextSeqNum: ${nextSeqNum}, ackSeqNum: ${ackSeqNum}`);
-            if (ackSeqNum === base) {
-                console.log('teste');
+            if (ackSeqNum >= base) {
                 base++;
+                console.log(`Base: ${base}, NextSeqNum: ${nextSeqNum}, ackSeqNum: ${ackSeqNum}`);
                 sendPacketsInSlidingWindow();
             }
             if (base * chunkSize >= fileBuffer.length) {
@@ -229,7 +228,6 @@ function sendFile(rinfo, filePath, hash) {
                 setRetransmission(nextSeqNum, packet);
                 offset += chunkSize;
                 nextSeqNum++;
-                console.log('sliding');
             }
         });
     }
