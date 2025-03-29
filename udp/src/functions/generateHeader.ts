@@ -1,4 +1,14 @@
 export function generateHeader(seqNum: number, ackFlag: number, eofFlag: number, checksum: number): Buffer {
+    /* 
+        Cria um cabeçalho de 10 bytes para cada pacote, com informações
+        da transmissão para verificar integridade deles.
+
+        * seqNum: Número de sequência dos pacotes para ajudar na ordenação.
+        * ackFlag: Indica se o pacote é um ACK ou um comum.
+        * eofFlag: Indica se é o último pacote do arquivo.
+        * checkSum: Valor calculado para verificar a integridade do pacote.
+    */
+    
     const header = Buffer.alloc(10);
     header.writeUInt32BE(seqNum, 0);   // SEQ_NUM (4 bytes)
     header.writeUInt8(ackFlag, 4);     // ACK_FLAG (1 byte)

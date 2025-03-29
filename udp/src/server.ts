@@ -11,106 +11,182 @@ const server = dgram.createSocket('udp4');
 const STORAGE = path.join(__dirname, '../storage');
 const UPLOADS = path.join(__dirname, '../uploads');
 
-const clientesAutenticados = new Set<string>();
+const authenticatedClients = new Set<string>();
 
-server.on('error', (err) => {
+server.on('error', (err: Error) => {
+    /*
+        Responsável por emitir erro (caso haja) no início da ligação
+        cliente-servidor, através da flag 'error'.
+     */
     console.error(`Erro no servidor:\n${err.stack}`);
     server.close();
 });
 
-server.on('message', (msg, rinfo) => {
-    const cmd = msg.toString().trim();
-    const clienteChave = `${rinfo.address}:${rinfo.port}`;
+server.on('message', (msg: Buffer<ArrayBufferLike>, rinfo: dgram.RemoteInfo) => {
+    /*
+        Parâmetros:
+        - msg: É o conteúdo do pacote recebido pelo servidor, que contém os dados
+        enviados pelo cliente.
+        - rinfo: Contém informações sobre quem enviou o pacote, como endereço IP, porta...
 
-    if (!clientesAutenticados.has(clienteChave)) {
-        autenticarCliente(cmd, rinfo, clienteChave);
+        Responsável por realizar a ligação com o cliente. Caso ele
+        não esteja autenticado, chama a função de autenticar cliente.
+        Caso já esteja autenticado, continua a execução normal e se o cliente
+        fizer um comando específico, chama sua respectiva função no switch-case.
+    */
+    const cmd = msg.toString().trim();
+    const clientKey = `${rinfo.address}:${rinfo.port}`;
+
+    if (!authenticatedClients.has(clientKey)) {
+        verifyClient(cmd, rinfo, clientKey);
         return;
     }
 
-    console.log(`💬 Cliente (${rinfo.address}:${rinfo.port}): ${msg}`);
+    console.log(`💬 Pacote recebido do cliente (${rinfo.address}:${rinfo.port}), tamanho: ${msg.length} bytes`);
 
-    const [comando, ...args] = cmd.split(' ');
+    const [command, ...args] = cmd.split(' ');
 
-    switch (comando) {
+    switch (command) {
         case 'LISTFILE':
             return listFile(rinfo);
         case 'DOWNLOADFILE':
             return downloadFile(rinfo, args);
         case 'UPLOADFILE':
-            return iniciarRecepcao(args.join(''), rinfo);
+            return startReceiving(args.join(''), rinfo);
     }
 });
 
 server.on('listening', () => {
+    /*
+        Responsável por "ligar" o servidor através da flag 'listening'.
+    */
     const address = server.address();
     console.log(`🖥️ Server operando no endereço ${address.address}:${address.port}`);
 });
 
 server.bind(Number(env.port));
 
-function autenticarCliente(msg: string, rinfo: dgram.RemoteInfo, clienteChave: string) {
+function verifyClient(msg: string, rinfo: dgram.RemoteInfo, clientKey: string) {
+    /*
+        Parâmetros:
+        - msg: É o conteúdo do pacote recebido pelo servidor, que contém os dados
+        enviados pelo cliente.
+        - rinfo: Contém informações sobre quem enviou o pacote, como endereço IP, porta...
+        - clientKey: Combinação IP e chave do cliente.
+
+        Responsável por autenticar o cliente. Caso a mensagem não seja igual a palavra-passe,
+        emite a mensagem de autenticação. Caso contrário adiciona o cliente na lista de autenticados.
+    */
     if (msg !== env.pass) {
         server.send(Buffer.from('🔒 Digite a senha para autenticação:'), rinfo.port, rinfo.address);
         return;
     }
 
-    clientesAutenticados.add(clienteChave);
+    authenticatedClients.add(clientKey);
     console.log(`✅ Cliente autenticado com sucesso!`);
     server.send(Buffer.from('✅ Autenticação concluída com sucesso!'), rinfo.port, rinfo.address);
 }
 
 function listFile(rinfo: dgram.RemoteInfo) {
-    try {
-        const arquivos = readdirSync(STORAGE);
+    /*
+        Parâmetros:
+        - rinfo: Contém informações sobre quem enviou o pacote, como endereço IP, porta...
 
-        if (arquivos.length === 0) {
-            const resposta = Buffer.from('Não há arquivos no servidor!');
-            server.send(resposta, rinfo.port, rinfo.address);
+        Lista os arquivos que estão no diretório/pasta storage.
+    */
+    try {
+        const files = readdirSync(STORAGE);
+
+        if (files.length === 0) {
+            const answer = Buffer.from('Não há arquivos no servidor!');
+            server.send(answer, rinfo.port, rinfo.address);
         } else {
-            const lista = arquivos.join('\n');
-            const resposta = Buffer.from(`📁 Arquivos disponíveis:\n${lista}`);
-            server.send(resposta, rinfo.port, rinfo.address);
+            const lista = files.join('\n');
+            const answer = Buffer.from(`📁 Arquivos disponíveis:\n${lista}`);
+            server.send(answer, rinfo.port, rinfo.address);
         }
     } catch (err) {
-        const erroMsg = Buffer.from('Erro ao listar arquivos!');
-        server.send(erroMsg, rinfo.port, rinfo.address);
+        const errorMessage = Buffer.from('Erro ao listar arquivos!');
+        server.send(errorMessage, rinfo.port, rinfo.address);
     }
 }
 
 function downloadFile(rinfo: dgram.RemoteInfo, args: string[]) {
-    const nomeArquivo = args.join('');
+    /*
+        Parâmetros:
+        - rinfo: Contém informações sobre quem enviou o pacote, como endereço IP, porta...
+        - args: O restante da string do comando de download, ou seja, o nome do arquivo que
+        se deseja baixar.
 
-    if (!nomeArquivo) {
-        const resposta = Buffer.from('Nome do arquivo não especificado.');
-        server.send(resposta, rinfo.port, rinfo.address);
+        Essa função realiza o download do arquivo desejado pelo cliente. Ela verifica se o nome foi passado, se
+        foi com sucesso já cria o caminho para salvamento do arquivo, após isso gera o hash do mesmo
+        e chama a função de envio.
+        Caso aconteça um erro na leitura, emite o erro.
+    */
+    const fileName = args.join('');
+
+    if (!fileName) {
+        const answer = Buffer.from('⚠️ Nome do arquivo não especificado.');
+        server.send(answer, rinfo.port, rinfo.address);
         return;
     }
 
-    const caminhoArquivo = path.join(STORAGE, nomeArquivo);
+    const filePath = path.join(STORAGE, fileName);
 
     try {
-        const hash = generateHash(caminhoArquivo);
-        sendFile(rinfo, caminhoArquivo, hash);
+        const hash = generateHash(filePath);
+        sendFile(rinfo, filePath, hash);
     } catch (err) {
         console.error('Erro ao ler o arquivo:', err);
-        const resposta = Buffer.from('Erro: arquivo não encontrado ou erro na leitura.');
-        server.send(resposta, rinfo.port, rinfo.address);
+        const answer = Buffer.from('Erro: arquivo não encontrado ou erro na leitura.');
+        server.send(answer, rinfo.port, rinfo.address);
     }
 }
 
 function sendFile(rinfo: dgram.RemoteInfo, filePath: string, hash: string) {
+    /*
+        Parâmetros:
+        - rinfo: Contém informações sobre quem enviou o pacote, como endereço IP, porta...
+        - filePath: É o caminho de salvamento do arquivo que está sendo enviado pelo servidor.
+        - hash: Hash de verificação do arquivo.
+
+        Lê o arquivo indicado por `filePath` como um Buffer e o divide em pedaços (`chunks`) de tamanho máximo `chunkSize` (1450 bytes).
+        Utiliza uma janela deslizante (`Sliding Window`) com tamanho fixo definido por `windowSize` (4 pacotes simultâneos) e
+        implementa retransmissão automática de pacotes através de um sistema de timeout (`setTimeout`), redefinido a cada envio bem-sucedido.
+        O listener (`server.on('message', ackHandler)`) serve para receber confirmações (`ACKs`) do cliente, e quando todos os pacotes
+        são enviados e reconhecidos, o servidor envia um pacote especial de EOF (End of File) para indicar o término da transmissão e
+        ainda limpar os timeouts pendentes e remove o listener `ackHandler` após a conclusão da transmissão.
+
+        Fluxo:
+        * 1. Leitura do arquivo e inicialização das variáveis de controle.
+        * 2. Envio dos pacotes dentro da janela deslizante (`sendPacketsInSlidingWindow()`).
+        * 3. Recebimento e tratamento de ACKs (`ackHandler()`).
+        * 4. Controle de retransmissão automática em caso de timeout (`setRetransmission()`).
+        * 5. Envio de pacote de EOF e limpeza dos recursos após finalização.
+    */
     const fileBuffer = readFileSync(filePath);
     const chunkSize = 1450;
-
     const windowSize = 4;
     let base = 0;
     let nextSeqNum = 0;
     let offset = 0;
     const timeouts: NodeJS.Timeout[] = [];
 
-    sendPacketsInWindow();
+    sendPacketsInSlidingWindow();
 
     function ackHandler(ackMsg: Buffer, ackRinfo: dgram.RemoteInfo) {
+        /*
+            Parâmetros:
+            - ackMsg: Pacote de dados recebido do cliente que contém o número de sequência
+            e uma flag indicando se é um ACK.
+            - ackRinfo: Objeto que contém informações sobre o remetente do ACK.
+
+            Processa os ACKs enviados pelo cliente. Quando o server receber um, ele
+            verifica se é um pacote válido e se corresponde ao arquivo enviado.
+            Se for válido, limpa o timeout e avança a base da janela deslizante.
+            Por fim, quando todos os pacotes são enviados e reconhecidos, envia um pacote EOF
+            para indicar o término da transmissão.
+        */
         if (ackRinfo.address !== rinfo.address || ackRinfo.port !== rinfo.port) return;
 
         const ackSeqNum = ackMsg.readUInt32BE(0);
@@ -123,7 +199,7 @@ function sendFile(rinfo: dgram.RemoteInfo, filePath: string, hash: string) {
 
             if (ackSeqNum === base) {
                 base++;
-                sendPacketsInWindow();
+                sendPacketsInSlidingWindow();
             }
 
             if (base * chunkSize >= fileBuffer.length) {
@@ -132,19 +208,25 @@ function sendFile(rinfo: dgram.RemoteInfo, filePath: string, hash: string) {
                 console.log('✅ EOF enviado, finalizando transmissão!');
                 console.log(`🔑 Hash SHA-256 do arquivo enviado: ${hash}`);
 
-                // Limpa os timeouts
                 timeouts.forEach(timeout => clearTimeout(timeout));
-
-                // ✅ Remove o listener do ACK para esse cliente
                 server.off('message', ackHandler);
             }
         }
     }
 
-    // ✅ Adiciona o listener
     server.on('message', ackHandler);
 
-    function sendPacketsInWindow() {
+    function sendPacketsInSlidingWindow() {
+        /*
+            Envia os pacotes para o cliente dentro de uma janela deslizante de tamanho fixo (windowSize). Ela envia
+            os pacotes enquanto o próximo número de sequência está dentro da janela permitida (base + windowSize) e
+            enquanto houver dados para enviar (offset < fileBuffer.length).
+            O arquivo é dividido em pedaços definidos por chunkSize, e para cada pedaço é calculado
+            um checkum para ser colocado no cabeçalho e garantir a integridade desse pacote.
+            Depois disso, ao transmitir o pacote, se um ACK não foi recebido, ele será retransmitido pela função
+            setRetransmission.
+            No final o offset é atualizado e o próximo pedaço do arquivo e o nextSeqNum é incrementado.
+        */
         while (nextSeqNum < base + windowSize && offset < fileBuffer.length) {
             const chunk = fileBuffer.slice(offset, offset + chunkSize);
             const checksum = checkSum(chunk);
@@ -162,6 +244,25 @@ function sendFile(rinfo: dgram.RemoteInfo, filePath: string, hash: string) {
     }
 
     function setRetransmission(seqNum: number, packet: Buffer) {
+        /*
+            Parâmetros:
+            - seqNum: Número de sequência do pacote que será retransmitido.
+            - packet: Pacote que será retransmitido caso o ACK não seja recebido.
+
+            Responsável por configurar um mecanismo de retransmissão automática para pacotes que
+            não receberem um ACK do cliente em um período específico.
+
+            Fluxo:
+
+            * 1. Se já existir um timeout configurado para o número de sequência fornecido (seqNum),
+            ele é limpo utilizando clearTimeout(), evitando múltiplos timeouts para o mesmo pacote.
+            * 2. Um novo timeout é configurado usando setTimeout(). Se o ACK do pacote (seqNum) não
+            for recebido dentro do tempo, o pacote é retransmitido para o cliente e o timeout é
+            configurado novamente através de uma chamada recursiva da própria função setRetransmission().
+        */
+
+        const time = 1000;
+
         if (timeouts[seqNum]) {
             clearTimeout(timeouts[seqNum]);
         }
@@ -170,11 +271,27 @@ function sendFile(rinfo: dgram.RemoteInfo, filePath: string, hash: string) {
             console.log(`⏰ Timeout! Retransmitindo pacote Seq ${seqNum}`);
             server.send(packet, rinfo.port, rinfo.address);
             setRetransmission(seqNum, packet);
-        }, 1000);
+        }, time);
     }
 }
 
-function iniciarRecepcao(fileName: string, rinfo: dgram.RemoteInfo) {
+function startReceiving(fileName: string, rinfo: dgram.RemoteInfo) {
+    /*
+        Parâmetros:
+        - fileName: Nome do arquivo que está sendo recebido pelo servidor.
+        - rinfo: Contém informações sobre quem enviou o pacote, como endereço IP, porta...
+
+        Essa função é responsável por receber o arquivo vindo do cliente. Ela recebe o arquivo em pacotes, verifica
+        a integridade de cada pacote utilizando checksum e monta o arquivo completo quando o processo é finalizado.
+        Também envia confirmações (ACKs) ao cliente para cada pacote recebido corretamente.
+
+        Fluxo:
+
+        * 1. Valida o nome do arquivo, caso não seja passado, emite um erro.
+        * 2. Caminho de salvamento do arquivo é determinado.
+        * 3. Array de chunks é usado para armazenar os pacotes recebidos.
+        * 4. expectedSeq representa o número de sequência do próximo pacote esperado.
+    */
     if (!fileName) {
         server.send(Buffer.from('Erro: Nome do arquivo não especificado!'), rinfo.port, rinfo.address);
         return;
@@ -182,11 +299,30 @@ function iniciarRecepcao(fileName: string, rinfo: dgram.RemoteInfo) {
 
     console.log(`📥 Iniciando recepção do arquivo: ${fileName}`);
 
-    const destino = path.join(UPLOADS, fileName);
+    const destination = path.join(UPLOADS, fileName);
     const chunks: Buffer[] = [];
     let expectedSeq = 0;
 
     function messageHandler(msg: Buffer, senderInfo: dgram.RemoteInfo) {
+        /*
+            Parâmetros:
+            - msg: Pacote de dados recebido do cliente.
+            - senderInfo: Contém informações sobre o cliente que enviou o pacote, como endereço IP, porta...
+
+            Essa função é responsável por tratar os pacotes recebidos pelo servidor
+            durante o processo de upload de arquivos. Ela valida os pacotes, verifica
+            a integridade dos dados, confirmaa a recepção dos pacotes com ACKs e salvaa o arquivo
+            completo após a recepção de todos os pacotes.
+
+            Fluxo:
+
+            * 1. Valida o remetente do pacote, se for um cliente diferente do que está
+            no cabeçalho, ignora o pacote.
+            * 2. Extrai informações sobre o cabeçalho.
+            * 3. Se for um pacote com eofFlag, salve o arquivo e gera um hash.
+            * 4. Verifica se o pacote tem o número de sequência esperado e se o checksum é válido.
+            * 5. Se for inválido, envia um ACK referente ao último pacote válido recebido.
+        */
         if (senderInfo.address !== rinfo.address || senderInfo.port !== rinfo.port) return;
 
         const seqNum = msg.readUInt32BE(0);
@@ -196,11 +332,11 @@ function iniciarRecepcao(fileName: string, rinfo: dgram.RemoteInfo) {
         const payload = msg.slice(10);
 
         if (eofFlag === 1) {
-            const arquivoFinal = Buffer.concat(chunks);
-            writeFileSync(destino, arquivoFinal);
+            const finalFile = Buffer.concat(chunks);
+            writeFileSync(destination, finalFile);
             console.log(`✅ EOF recebido. Arquivo "${fileName}" montado com sucesso!`);
 
-            const hash = generateHash(destino);
+            const hash = generateHash(destination);
             console.log(`🔑 Hash SHA-256 do arquivo recebido: ${hash}`);
 
             server.off('message', messageHandler);
