@@ -245,7 +245,7 @@ function sendFile(rinfo: dgram.RemoteInfo, filePath: string, hash: string) {
             offset += chunkSize;
             nextSeqNum++;
 
-            await sleep(10);
+            await sleep(30);
         }
     }
 
