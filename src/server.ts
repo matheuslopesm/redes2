@@ -197,8 +197,9 @@ function sendFile(rinfo: dgram.RemoteInfo, filePath: string, hash: string) {
 
             clearTimeout(timeouts[ackSeqNum]);
 
-            if (ackSeqNum >= base) {
-                base = ackSeqNum + 1;
+            if (ackSeqNum === base) {
+                console.log('teste')
+                base++;
                 sendPacketsInSlidingWindow();
             }
 
@@ -240,6 +241,8 @@ function sendFile(rinfo: dgram.RemoteInfo, filePath: string, hash: string) {
 
             offset += chunkSize;
             nextSeqNum++;
+            console.log('sliding')
+
         }
     }
 
