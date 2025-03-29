@@ -1,3 +1,4 @@
 node_modules/
 downloads/*
+uploads/*
 !downloads/.gitkeep
