@@ -171,6 +171,7 @@ function sendFile(rinfo: dgram.RemoteInfo, filePath: string, hash: string) {
     let nextSeqNum = 0;
     let offset = 0;
     const timeouts: NodeJS.Timeout[] = [];
+    let lastBase = base;
 
     sendPacketsInSlidingWindow();
 
@@ -197,7 +198,6 @@ function sendFile(rinfo: dgram.RemoteInfo, filePath: string, hash: string) {
 
             clearTimeout(timeouts[ackSeqNum]);
 
-            let lastBase = base;
 
             if (ackSeqNum >= base) {
                 base++;

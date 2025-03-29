@@ -10,11 +10,10 @@ Todas as tecnologias utilizadas foram:
     <img align="center" alt="Mat-Node" height="30" src="https://img.shields.io/badge/node.js-6DA55F?style=for-the-badge&logo=node.js&logoColor=white">
 </div>
 
-## Starting 
+## Starting
 
 Para usar o projeto, siga os passos abaixo:
 
-1. Instale as dependências com o comando `yarn`.
-2. Pelo terminal, vá até a pasta `udp`.
-3. Rode `yarn build` e ele gerará os arquivos `.js`.
-4. Rode `yarn start-server` e `yarn start-client` em terminais distintos.
+1. Instale as dependências com o comando `npm i -f`.
+2. Rode `npm run build` e ele gerará os arquivos `.js`.
+3. Rode `npm run start-server` e `npm run start-client` em terminais distintos.

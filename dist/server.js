@@ -169,6 +169,7 @@ function sendFile(rinfo, filePath, hash) {
     let nextSeqNum = 0;
     let offset = 0;
     const timeouts = [];
+    let lastBase = base;
     sendPacketsInSlidingWindow();
     function ackHandler(ackMsg, ackRinfo) {
         /*
@@ -190,7 +191,6 @@ function sendFile(rinfo, filePath, hash) {
         if (isAck === 1) {
             console.log(`✅ ACK recebido para Seq ${ackSeqNum}`);
             clearTimeout(timeouts[ackSeqNum]);
-            let lastBase = base;
             if (ackSeqNum >= base) {
                 base++;
                 console.log(`Base: ${base}, NextSeqNum: ${nextSeqNum}, ackSeqNum: ${ackSeqNum}`);
