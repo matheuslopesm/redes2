@@ -119,6 +119,7 @@ function startReceiving(fileName: string) {
     const destination = path.join(__dirname, `../downloads/${fileName}`);
     const chunks: Buffer[] = [];
     let expectedSeq = 0;
+    let isDownloadComplete = false;
 
     console.log(`📥 Iniciando recebimento do arquivo: ${fileName}`);
 
@@ -151,15 +152,8 @@ function startReceiving(fileName: string) {
         const payload = msg.slice(10);
 
         if (eofFlag === 1) {
-            const arquivoFinal = Buffer.concat(chunks);
-            writeFileSync(destination, arquivoFinal);
             console.log(`✅ EOF recebido. Arquivo "${fileName}" montado!`);
-
-            const hash = generateHash(destination);
-            console.log(`🔑 Hash SHA-256 do arquivo recebido: ${hash}`);
-
-            client.off('message', messageHandler);
-            return;
+            isDownloadComplete = true;
         }
 
         if (seqNum === expectedSeq && isAck === 0 && checkSum(payload) === checksum) {
@@ -175,6 +169,18 @@ function startReceiving(fileName: string) {
             console.log(`⚠️ Pacote inválido ou fora de ordem! Esperado: ${expectedSeq}, Recebido: ${seqNum}`);
             const ack = generateHeader(expectedSeq - 1, 1, 0, 0);
             client.send(ack, 0, ack.length, Number(env.port), env.host);
+        }
+
+        if (isDownloadComplete && expectedSeq === chunks.length) {
+            // Salva o arquivo apenas quando todos os pacotes forem recebidos corretamente
+            const arquivoFinal = Buffer.concat(chunks);
+            writeFileSync(destination, arquivoFinal);
+            console.log(`✅ Arquivo "${fileName}" salvo com sucesso em: ${destination}`);
+
+            const hash = generateHash(destination);
+            console.log(`🔑 Hash SHA-256 do arquivo recebido: ${hash}`);
+
+            client.off('message', messageHandler);
         }
     }
 
@@ -235,12 +241,11 @@ function sendFile(rinfo: dgram.RemoteInfo, fileBuffer: Buffer<ArrayBufferLike>, 
 
     sendPacketsInSlidingWindow();
 
-    function ackHandler(ackMsg: Buffer, ackRinfo: dgram.RemoteInfo) {
+    function ackHandler(ackMsg: Buffer) {
         /*
             Parâmetros:
             - ackMsg: Pacote de dados recebido do cliente que contém o número de sequência
             e uma flag indicando se é um ACK.
-            - ackRinfo: Objeto que contém informações sobre o remetente do ACK.
 
             Processa os ACKs enviados pelo cliente. Quando o server receber um, ele
             verifica se é um pacote válido e se corresponde ao arquivo enviado.
