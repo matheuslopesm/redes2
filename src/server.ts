@@ -66,10 +66,6 @@ server.on('listening', () => {
 
 server.bind(Number(env.port));
 
-function sleep(ms: number) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
 function verifyClient(msg: string, rinfo: dgram.RemoteInfo, clientKey: string) {
     /*
         Parâmetros:
@@ -201,8 +197,8 @@ function sendFile(rinfo: dgram.RemoteInfo, filePath: string, hash: string) {
 
             clearTimeout(timeouts[ackSeqNum]);
 
-            if (ackSeqNum === base) {
-                base++;
+            if (ackSeqNum >= base) {
+                base = ackSeqNum + 1;
                 sendPacketsInSlidingWindow();
             }
 
@@ -244,8 +240,6 @@ function sendFile(rinfo: dgram.RemoteInfo, filePath: string, hash: string) {
 
             offset += chunkSize;
             nextSeqNum++;
-
-            await sleep(30);
         }
     }
 
