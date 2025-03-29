@@ -196,6 +196,7 @@ function sendFile(rinfo: dgram.RemoteInfo, filePath: string, hash: string) {
             console.log(`✅ ACK recebido para Seq ${ackSeqNum}`);
 
             clearTimeout(timeouts[ackSeqNum]);
+            console.log(`Base: ${base}, NextSeqNum: ${nextSeqNum}, ackSeqNum: ${ackSeqNum}`);
 
             if (ackSeqNum === base) {
                 console.log('teste')
