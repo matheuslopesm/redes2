@@ -316,7 +316,7 @@ function sendFile(rinfo: dgram.RemoteInfo, fileBuffer: Buffer<ArrayBufferLike>, 
           for recebido dentro do tempo, o pacote é retransmitido para o cliente e o timeout é
           configurado novamente através de uma chamada recursiva da própria função setRetransmission().
         */
-        const time = 1000;
+        const time = 3000;
 
         if (timeouts[seqNum]) {
             clearTimeout(timeouts[seqNum]);

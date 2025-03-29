@@ -261,7 +261,7 @@ function sendFile(rinfo: dgram.RemoteInfo, filePath: string, hash: string) {
             configurado novamente através de uma chamada recursiva da própria função setRetransmission().
         */
 
-        const time = 1000;
+        const time = 3000;
 
         if (timeouts[seqNum]) {
             clearTimeout(timeouts[seqNum]);
