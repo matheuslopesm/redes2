@@ -66,6 +66,10 @@ server.on('listening', () => {
 
 server.bind(Number(env.port));
 
+function sleep(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 function verifyClient(msg: string, rinfo: dgram.RemoteInfo, clientKey: string) {
     /*
         Parâmetros:
@@ -216,7 +220,7 @@ function sendFile(rinfo: dgram.RemoteInfo, filePath: string, hash: string) {
 
     server.on('message', ackHandler);
 
-    function sendPacketsInSlidingWindow() {
+    async function sendPacketsInSlidingWindow() {
         /*
             Envia os pacotes para o cliente dentro de uma janela deslizante de tamanho fixo (windowSize). Ela envia
             os pacotes enquanto o próximo número de sequência está dentro da janela permitida (base + windowSize) e
@@ -240,6 +244,8 @@ function sendFile(rinfo: dgram.RemoteInfo, filePath: string, hash: string) {
 
             offset += chunkSize;
             nextSeqNum++;
+
+            await sleep(10);
         }
     }
 
