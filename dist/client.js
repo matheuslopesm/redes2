@@ -13,7 +13,7 @@ const checkSum_1 = require("./functions/checkSum");
 const generateHash_1 = require("./functions/generateHash");
 const generateHeader_1 = require("./functions/generateHeader");
 const client = dgram_1.default.createSocket('udp4');
-const STORAGE = path_1.default.join(__dirname, '../storage');
+const DOWNLOADS = path_1.default.join(__dirname, '../downloads');
 const rl = readline_1.default.createInterface({
     input: process.stdin,
     output: process.stdout
@@ -33,11 +33,10 @@ function sendMessage(msg) {
         }
     });
 }
-rl.on('line', (input, rinfo) => {
+rl.on('line', (input) => {
     /*
       Parâmetros:
       - input: Toda e qualquer mensagem passada pelo teclado do cliente.
-      - rinfo: Contém informações sobre quem enviou o pacote, como endereço IP, porta...
 
       Responsável por identificar comandos específicos e seguir os fluxos dos mesmos.
     */
@@ -55,7 +54,7 @@ rl.on('line', (input, rinfo) => {
             downloadFileMsg(args);
             return;
         case 'uploadfile':
-            uploadFileMsg(rinfo, args);
+            uploadFileMsg(args);
             return;
     }
     sendMessage(input);
@@ -109,7 +108,6 @@ function startReceiving(fileName) {
     const destination = path_1.default.join(__dirname, `../downloads/${fileName}`);
     const chunks = [];
     let expectedSeq = 0;
-    let isDownloadComplete = false;
     console.log(`📥 Iniciando recebimento do arquivo: ${fileName}`);
     function messageHandler(msg) {
         /*
@@ -137,8 +135,13 @@ function startReceiving(fileName) {
         const checksum = msg.readUInt32BE(6);
         const payload = msg.slice(10);
         if (eofFlag === 1) {
+            const arquivoFinal = Buffer.concat(chunks);
+            (0, fs_1.writeFileSync)(destination, arquivoFinal);
             console.log(`✅ EOF recebido. Arquivo "${fileName}" montado!`);
-            isDownloadComplete = true;
+            const hash = (0, generateHash_1.generateHash)(destination);
+            console.log(`🔑 Hash SHA-256 do arquivo recebido: ${hash}`);
+            client.off('message', messageHandler);
+            return;
         }
         if (seqNum === expectedSeq && isAck === 0 && (0, checkSum_1.checkSum)(payload) === checksum) {
             console.log(`✅ Pacote válido recebido: Seq ${seqNum}`);
@@ -152,22 +155,12 @@ function startReceiving(fileName) {
             const ack = (0, generateHeader_1.generateHeader)(expectedSeq - 1, 1, 0, 0);
             client.send(ack, 0, ack.length, Number(env_1.env.port), env_1.env.host);
         }
-        if (isDownloadComplete && expectedSeq === chunks.length) {
-            // Salva o arquivo apenas quando todos os pacotes forem recebidos corretamente
-            const arquivoFinal = Buffer.concat(chunks);
-            (0, fs_1.writeFileSync)(destination, arquivoFinal);
-            console.log(`✅ Arquivo "${fileName}" salvo com sucesso em: ${destination}`);
-            const hash = (0, generateHash_1.generateHash)(destination);
-            console.log(`🔑 Hash SHA-256 do arquivo recebido: ${hash}`);
-            client.off('message', messageHandler);
-        }
     }
     client.on('message', messageHandler);
 }
-function uploadFileMsg(rinfo, args) {
+function uploadFileMsg(args) {
     /*
       Parâmetros:
-      - rinfo: Contém informações sobre quem enviou o pacote, como endereço IP, porta...
       - args: O restante da string do comando de upload, ou seja, o nome do arquivo que
       se deseja mandar pro server.
 
@@ -180,11 +173,11 @@ function uploadFileMsg(rinfo, args) {
         console.log('Você precisa informar o nome do arquivo!');
         return;
     }
-    const filePath = path_1.default.join(STORAGE, fileName);
+    const filePath = path_1.default.join(DOWNLOADS, fileName);
     try {
         const fileBuffer = (0, fs_1.readFileSync)(filePath);
         const hash = (0, generateHash_1.generateHash)(filePath);
-        sendFile(rinfo, fileBuffer, hash);
+        sendFile(fileBuffer, hash);
     }
     catch (err) {
         console.log('Erro ao ler o arquivo. Verifique se ele existe na pasta storage.');
@@ -192,10 +185,9 @@ function uploadFileMsg(rinfo, args) {
     }
     sendMessage(`UPLOADFILE ${fileName}`);
 }
-function sendFile(rinfo, fileBuffer, hash) {
+function sendFile(fileBuffer, hash) {
     /*
       Parâmetros:
-      - rinfo: Contém informações sobre quem enviou o pacote, como endereço IP, porta...
       - fileBuffer: São os dados do arquivo que está sendo enviado para o servidor.
       - hash: Hash de verificação do arquivo.
 

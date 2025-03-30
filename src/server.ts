@@ -171,7 +171,6 @@ function sendFile(rinfo: dgram.RemoteInfo, filePath: string, hash: string) {
     let nextSeqNum = 0;
     let offset = 0;
     const timeouts: NodeJS.Timeout[] = [];
-    let lastBase = base;
 
     sendPacketsInSlidingWindow();
 
@@ -198,15 +197,9 @@ function sendFile(rinfo: dgram.RemoteInfo, filePath: string, hash: string) {
 
             clearTimeout(timeouts[ackSeqNum]);
 
-
-            if (ackSeqNum >= base) {
+            if (ackSeqNum === base) {
                 base++;
-                console.log(`Base: ${base}, NextSeqNum: ${nextSeqNum}, ackSeqNum: ${ackSeqNum}`);
-
-                if (base > lastBase) {
-                    lastBase = base;
-                    sendPacketsInSlidingWindow();
-                }
+                sendPacketsInSlidingWindow();
             }
 
             if (base * chunkSize >= fileBuffer.length) {

@@ -9,7 +9,7 @@ import { generateHash } from './functions/generateHash';
 import { generateHeader } from './functions/generateHeader';
 
 const client = dgram.createSocket('udp4');
-const STORAGE = path.join(__dirname, '../storage');
+const DOWNLOADS = path.join(__dirname, '../downloads');
 
 const rl = readline.createInterface({
     input: process.stdin,
@@ -33,11 +33,10 @@ function sendMessage(msg: string) {
     });
 }
 
-rl.on('line', (input: string, rinfo: dgram.RemoteInfo) => {
+rl.on('line', (input: string) => {
     /*
       Parâmetros:
       - input: Toda e qualquer mensagem passada pelo teclado do cliente.
-      - rinfo: Contém informações sobre quem enviou o pacote, como endereço IP, porta...
 
       Responsável por identificar comandos específicos e seguir os fluxos dos mesmos.
     */
@@ -56,7 +55,7 @@ rl.on('line', (input: string, rinfo: dgram.RemoteInfo) => {
             downloadFileMsg(args);
             return;
         case 'uploadfile':
-            uploadFileMsg(rinfo, args);
+            uploadFileMsg(args);
             return;
     }
 
@@ -119,7 +118,6 @@ function startReceiving(fileName: string) {
     const destination = path.join(__dirname, `../downloads/${fileName}`);
     const chunks: Buffer[] = [];
     let expectedSeq = 0;
-    let isDownloadComplete = false;
 
     console.log(`📥 Iniciando recebimento do arquivo: ${fileName}`);
 
@@ -152,8 +150,15 @@ function startReceiving(fileName: string) {
         const payload = msg.slice(10);
 
         if (eofFlag === 1) {
+            const arquivoFinal = Buffer.concat(chunks);
+            writeFileSync(destination, arquivoFinal);
             console.log(`✅ EOF recebido. Arquivo "${fileName}" montado!`);
-            isDownloadComplete = true;
+
+            const hash = generateHash(destination);
+            console.log(`🔑 Hash SHA-256 do arquivo recebido: ${hash}`);
+
+            client.off('message', messageHandler);
+            return;
         }
 
         if (seqNum === expectedSeq && isAck === 0 && checkSum(payload) === checksum) {
@@ -170,27 +175,14 @@ function startReceiving(fileName: string) {
             const ack = generateHeader(expectedSeq - 1, 1, 0, 0);
             client.send(ack, 0, ack.length, Number(env.port), env.host);
         }
-
-        if (isDownloadComplete && expectedSeq === chunks.length) {
-            // Salva o arquivo apenas quando todos os pacotes forem recebidos corretamente
-            const arquivoFinal = Buffer.concat(chunks);
-            writeFileSync(destination, arquivoFinal);
-            console.log(`✅ Arquivo "${fileName}" salvo com sucesso em: ${destination}`);
-
-            const hash = generateHash(destination);
-            console.log(`🔑 Hash SHA-256 do arquivo recebido: ${hash}`);
-
-            client.off('message', messageHandler);
-        }
     }
 
     client.on('message', messageHandler);
 }
 
-function uploadFileMsg(rinfo: dgram.RemoteInfo, args: string[]) {
+function uploadFileMsg(args: string[]) {
     /*
       Parâmetros:
-      - rinfo: Contém informações sobre quem enviou o pacote, como endereço IP, porta...
       - args: O restante da string do comando de upload, ou seja, o nome do arquivo que
       se deseja mandar pro server.
 
@@ -205,12 +197,12 @@ function uploadFileMsg(rinfo: dgram.RemoteInfo, args: string[]) {
         return;
     }
 
-    const filePath = path.join(STORAGE, fileName);
+    const filePath = path.join(DOWNLOADS, fileName);
 
     try {
         const fileBuffer = readFileSync(filePath);
         const hash = generateHash(filePath);
-        sendFile(rinfo, fileBuffer, hash);
+        sendFile(fileBuffer, hash);
     } catch (err) {
         console.log('Erro ao ler o arquivo. Verifique se ele existe na pasta storage.');
         return;
@@ -219,10 +211,9 @@ function uploadFileMsg(rinfo: dgram.RemoteInfo, args: string[]) {
     sendMessage(`UPLOADFILE ${fileName}`);
 }
 
-function sendFile(rinfo: dgram.RemoteInfo, fileBuffer: Buffer<ArrayBufferLike>, hash: string) {
+function sendFile(fileBuffer: Buffer<ArrayBufferLike>, hash: string) {
     /*
       Parâmetros:
-      - rinfo: Contém informações sobre quem enviou o pacote, como endereço IP, porta...
       - fileBuffer: São os dados do arquivo que está sendo enviado para o servidor.
       - hash: Hash de verificação do arquivo.
 
